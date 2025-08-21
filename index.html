@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zokou-MD - Connexion</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<style>
+  :root {
+    --primary: #7c4dff;
+    --primary-dark: #651fff;
+    --dark: #121212;
+    --darker: #0a0a0a;
+    --light: #e0e0e0;
+    --gray: #757575;
+    --success: #00e676;
+    --danger: #ff5252;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    color: var(--light);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+  }
+
+  .container {
+    background: rgba(20, 20, 20, 0.8);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 2.5rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    text-align: center;
+    width: 100%;
+    max-width: 420px;
+    margin: 1rem;
+  }
+
+  h1 {
+    color: var(--light);
+    margin-bottom: 2rem;
+    font-weight: 600;
+    font-size: 1.8rem;
+    letter-spacing: 0.5px;
+  }
+
+  .session-control {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    gap: 0.5rem;
+  }
+
+  .custom-session-input,
+  .phone-input {
+    transition: all 0.4s ease-out;
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+  }
+
+  .custom-session-input.active,
+  .phone-input.active {
+    opacity: 1;
+    max-height: 500px;
+  }
+
+  input[type="text"],
+  input[type="number"] {
+    background: rgba(30, 30, 30, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--light);
+    padding: 0.9rem 1.2rem;
+    border-radius: 10px;
+    width: 100%;
+    font-size: 1rem;
+    margin-top: 0.5rem;
+    transition: all 0.3s ease;
+  }
+
+  input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(124, 77, 255, 0.2);
+  }
+
+  .checkbox-container {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .checkbox-container input {
+    margin-right: 0.5rem;
+    accent-color: var(--primary);
+  }
+
+  .buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 0.9rem 1.8rem;
+    border-radius: 10px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-weight: 500;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 120px;
+    justify-content: center;
+    transform: scale(1);
+  }
+
+  .btn:hover {
+    background: var(--primary-dark);
+    transform: scale(1.03);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .btn:active {
+    transform: scale(0.98);
+  }
+
+  .btn-reset {
+    background: var(--danger);
+  }
+
+  .btn-reset:hover {
+    background: #ff1744;
+  }
+
+  .display-area {
+    background: linear-gradient(135deg, var(--darker), var(--dark));
+    border-radius: 14px;
+    padding: 2rem;
+    min-height: 250px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .display-area::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(124, 77, 255, 0.1) 0%, transparent 70%);
+    z-index: 0;
+  }
+
+  #qrcode {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    border: 12px solid white;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    display: none;
+    position: relative;
+    z-index: 1;
+    transition: all 0.4s ease-out;
+    opacity: 0;
+  }
+
+  #qrcode[style*="display: block"] {
+    opacity: 1;
+  }
+
+  .session-id {
+    font-family: 'Fira Code', monospace;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.8rem 1.2rem;
+    border-radius: 8px;
+    display: none;
+    align-items: center;
+    gap: 0.8rem;
+    margin-top: 1rem;
+    position: relative;
+    z-index: 1;
+    border: 1px solid rgba(124, 77, 255, 0.2);
+    transition: all 0.4s ease-out;
+    opacity: 0;
+  }
+
+  .session-id.active {
+    display: flex;
+    opacity: 1;
+  }
+
+  .copy-btn {
+    background: none;
+    border: none;
+    color: var(--gray);
+    cursor: pointer;
+    transition: color 0.2s;
+    padding: 0.3rem;
+    border-radius: 4px;
+  }
+
+  .copy-btn:hover {
+    color: var(--light);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .copy-btn.copied {
+    color: var(--success);
+  }
+
+  #pairingCode {
+    font-family: 'Fira Code', monospace;
+    font-size: 1.5rem;
+    letter-spacing: 3px;
+    background: linear-gradient(135deg, var(--darker), var(--dark));
+    padding: 1.2rem 1.8rem;
+    border-radius: 10px;
+    display: none;
+    font-weight: bold;
+    color: #fff;
+    border: 1px solid rgba(124, 77, 255, 0.3);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    transition: all 0.4s ease-out;
+    opacity: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  #pairingCode[style*="display: block"] {
+    opacity: 1;
+  }
+
+  .phone-input {
+    width: 100%;
+  }
+
+  .status {
+    margin-top: 1rem;
+    font-size: 0.95rem;
+    color: var(--gray);
+    position: relative;
+    z-index: 1;
+    max-width: 80%;
+  }
+
+  .loading {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid rgba(124, 77, 255, 0.1);
+    border-top-color: var(--primary);
+    border-right-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1.5rem;
+  }
+
+  .input-valid {
+    border-color: var(--success) !important;
+    box-shadow: 0 0 0 2px rgba(0, 230, 118, 0.2) !important;
+  }
+
+  .input-invalid {
+    border-color: var(--danger) !important;
+    box-shadow: 0 0 0 2px rgba(255, 82, 82, 0.2) !important;
+  }
+
+  .btn:disabled {
+    background: var(--gray) !important;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+    opacity: 0.7;
+  }
+
+  .session-validation {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    height: 20px;
+  }
+
+  .session-validation .mini-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    display: none;
+  }
+
+  .session-validation .validation-message {
+    flex: 1;
+  }
+
+  .validation-success {
+    color: var(--success);
+  }
+
+  .validation-error {
+    color: var(--danger);
+  }
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (max-width: 480px) {
+    .container {
+      padding: 1.5rem;
+    }
+
+    .buttons {
+      flex-direction: column;
+    }
+
+    .btn {
+      width: 100%;
+    }
+  }
+</style>
+
+<body>
+  <div class="container">
+    <h1>Zokou-MD Login</h1>
+
+    <div class="session-control">
+      <label class="checkbox-container">
+        <input type="checkbox" id="useCustomSession">
+        <span>Use a custom session</span>
+      </label>
+    </div>
+
+    <div class="custom-session-input" id="customSessionInput">
+      <input type="text" id="sessionId" placeholder="Enter session ID">
+      <div class="session-validation">
+        <div class="mini-spinner"></div>
+        <div class="validation-message"></div>
+      </div>
+    </div>
+
+    <div class="phone-input" id="phoneInput">
+      <input type="number" id="phoneNumber" placeholder="Enter your phone number">
+      <button class="btn" id="validatePhone" style="margin-top: 0.8rem; width: 100%;">
+        <i class="fas fa-check"></i> Validate
+      </button>
+    </div>
+
+    <div class="display-area">
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+      </div>
+
+      <img src="" alt="QR Code" id="qrcode">
+      <div id="pairingCode"></div>
+
+      <div class="session-id" id="sessionIdDisplay">
+        <span id="sessionIdText"></span>
+        <button class="copy-btn" id="copySessionBtn" title="Copy">
+          <i class="far fa-copy"></i>
+        </button>
+      </div>
+
+      <p class="status" id="status">Select a login method</p>
+    </div>
+
+    <div class="buttons" id="connectionButtons">
+      <button id="qrBtn" class="btn">
+        <i class="fas fa-qrcode"></i> QR Code
+      </button>
+      <button id="pairingBtn" class="btn">
+        <i class="fas fa-link"></i> Pairing Code
+      </button>
+    </div>
+
+    <div class="buttons" id="resetButton" style="display: none;">
+      <button id="resetBtn" class="btn btn-reset">
+        <i class="fas fa-sync-alt"></i> Reset
+      </button>
+    </div>
+  </div>
+
+  <script>
+    let isSessionValid = false;
+    let validationTimeout = null;
+    const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+    const ws = new WebSocket(`${protocol}${window.location.hostname}`);
+    let currentConnectionType = null;
+
+    ws.onopen = () => {
+      console.log('WebSocket connection established');
+    }
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      document.getElementById('status').textContent = 'Server connection error';
+      document.getElementById('loading').style.display = 'none';
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const useCustomSession = document.getElementById('useCustomSession');
+      const customSessionInput = document.getElementById('customSessionInput');
+      const sessionIdInput = document.getElementById('sessionId');
+      const qrBtn = document.getElementById('qrBtn');
+      const pairingBtn = document.getElementById('pairingBtn');
+      const resetBtn = document.getElementById('resetBtn');
+      const phoneInput = document.getElementById('phoneInput');
+      const phoneNumber = document.getElementById('phoneNumber');
+      const validatePhone = document.getElementById('validatePhone');
+      const qrcode = document.getElementById('qrcode');
+      const pairingCode = document.getElementById('pairingCode');
+      const loading = document.getElementById('loading');
+      const status = document.getElementById('status');
+      const sessionIdDisplay = document.getElementById('sessionIdDisplay');
+      const sessionIdText = document.getElementById('sessionIdText');
+      const copySessionBtn = document.getElementById('copySessionBtn');
+      const connectionButtons = document.getElementById('connectionButtons');
+      const resetButton = document.getElementById('resetButton');
+      const validationSpinner = document.querySelector('.mini-spinner');
+      const validationMessage = document.querySelector('.validation-message');
+
+      useCustomSession.addEventListener('change', function() {
+        if (this.checked) {
+          customSessionInput.classList.add('active');
+          if (!sessionIdInput.value.trim()) {
+            sessionIdInput.classList.add('input-invalid');
+            validationMessage.textContent = 'Session ID is required';
+            validationMessage.className = 'validation-message validation-error';
+            isSessionValid = false;
+            qrBtn.disabled = true;
+            pairingBtn.disabled = true;
+          } else {
+            validateSessionId(sessionIdInput.value);
+          }
+        } else {
+          customSessionInput.classList.remove('active');
+          qrBtn.disabled = false;
+          pairingBtn.disabled = false;
+        }
+      });
+
+      let debounceTimer;
+      
+      sessionIdInput.addEventListener('input', function() {
+        const value = this.value;
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          validateSessionId(value); // N'appellera la fonction que si pas de frappe pendant X ms
+        }, 400);
+      });
+
+      qrBtn.addEventListener('click', function() {
+        startConnection('qrcode');
+      });
+
+      pairingBtn.addEventListener('click', function() {
+        startConnection('pairing');
+      });
+
+      resetBtn.addEventListener('click', function() {
+        resetAll();
+      });
+
+      validatePhone.addEventListener('click', function() {
+        if (!phoneNumber.value) {
+          status.textContent = 'Please enter a phone number';
+          return;
+        }
+
+        loading.style.display = 'flex';
+        status.textContent = 'Generating Pairing Code...';
+
+        ws.send(JSON.stringify({
+          type: 'request',
+          content: 'pairing',
+          data: {
+            phoneNumber: phoneNumber.value,
+            customSession: useCustomSession.checked ? sessionIdInput.value : null
+          }
+        }));
+      });
+
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          console.log('Message received:', message);
+
+          if (message.type === 'qrcode') {
+            handleQRResponse(message.data);
+          } else if (message.type === 'pairing') {
+            handlePairingResponse(message.data);
+          } else if (message.type === 'session') {
+            sessionIdText.textContent = message.session;
+            sessionIdDisplay.classList.add('active');
+          } else if (message.type === 'error') {
+            handleError(message.message);
+          } else if (message.type === 'connected') {
+            status.textContent = 'Successfully connected!';
+          } else if (message.type === 'session_validation') {
+            if (message.session !== sessionIdInput.value) return null;
+            validationSpinner.style.display = 'none';
+            if (message.valid) {
+              sessionIdInput.classList.add('input-valid');
+              sessionIdInput.classList.remove('input-invalid');
+              validationMessage.textContent = 'Session valid';
+              validationMessage.className = 'validation-message validation-success';
+              isSessionValid = true;
+            } else {
+              sessionIdInput.classList.add('input-invalid');
+              sessionIdInput.classList.remove('input-valid');
+              validationMessage.textContent = message.reason || 'Invalid session';
+              validationMessage.className = 'validation-message validation-error';
+              isSessionValid = false;
+            }
+
+            qrBtn.disabled = !isSessionValid && useCustomSession.checked;
+            pairingBtn.disabled = !isSessionValid && useCustomSession.checked;
+          }
+
+        } catch (e) {
+          console.error('Error parsing message:', e);
+          handleError('Data processing error');
+        }
+      };
+
+      function validateSessionId(sessionId) {
+        qrBtn.disabled = true;
+        pairingBtn.disabled = true;
+
+        if (validationTimeout) {
+          clearTimeout(validationTimeout);
+        }
+
+        if (!sessionId.trim() && useCustomSession.checked) {
+          sessionIdInput.classList.add('input-invalid');
+          sessionIdInput.classList.remove('input-valid');
+          validationSpinner.style.display = 'none';
+          validationMessage.textContent = 'Session ID is required';
+          validationMessage.className = 'validation-message validation-error';
+          isSessionValid = false;
+          qrBtn.disabled = true;
+          pairingBtn.disabled = true;
+          return;
+        }
+
+        if (!sessionId.trim()) {
+          sessionIdInput.classList.remove('input-valid', 'input-invalid');
+          validationSpinner.style.display = 'none';
+          validationMessage.textContent = '';
+          isSessionValid = false;
+          qrBtn.disabled = false;
+          pairingBtn.disabled = false;
+          return;
+        }
+
+        sessionIdInput.classList.remove('input-valid', 'input-invalid');
+        validationSpinner.style.display = 'block';
+        validationMessage.textContent = 'Validating...';
+        validationMessage.className = 'validation-message';
+
+        ws.send(JSON.stringify({
+          type: 'validate_session',
+          sessionId: sessionId
+        }));
+      }
+
+      function startConnection(type) {
+        if (useCustomSession.checked && (!isSessionValid || !sessionIdInput.value.trim())) {
+          status.textContent = 'Please enter a valid session';
+          sessionIdInput.classList.add('input-invalid');
+          validationMessage.textContent = 'Invalid session';
+          validationMessage.className = 'validation-message validation-error';
+          sessionIdInput.focus();
+          return;
+        }
+
+        resetDisplay();
+        currentConnectionType = type;
+        connectionButtons.style.display = 'none';
+        resetButton.style.display = 'flex';
+
+        if (type === 'qrcode') {
+          customSessionInput.classList.remove('active');
+          phoneInput.classList.remove('active');
+          loading.style.display = 'flex';
+          status.textContent = 'Generating QR Code...';
+
+          ws.send(JSON.stringify({
+            type: 'request',
+            content: 'qrcode',
+            data: {
+              customSession: useCustomSession.checked ? sessionIdInput.value : null
+            }
+          }));
+        } else if (type === 'pairing') {
+          customSessionInput.classList.remove('active');
+          phoneInput.classList.add('active');
+          status.textContent = 'Enter your phone number';
+        }
+      }
+
+      function handleQRResponse(qrData) {
+        loading.style.display = 'none';
+        qrcode.style.display = 'block';
+        qrcode.src = qrData;
+        status.textContent = 'Scan this QR Code with WhatsApp';
+      }
+
+      function handlePairingResponse(code) {
+        loading.style.display = 'none';
+        phoneInput.classList.remove('active');
+        pairingCode.textContent = code;
+        pairingCode.style.display = 'block';
+        status.textContent = 'Enter this code in WhatsApp';
+      }
+
+      function handleError(errorMessage) {
+        loading.style.display = 'none';
+        status.textContent = errorMessage || 'An error occurred';
+      }
+
+      function resetDisplay() {
+        qrcode.style.display = 'none';
+        pairingCode.style.display = 'none';
+        sessionIdDisplay.classList.remove('active');
+        phoneInput.classList.remove('active');
+      }
+
+      function resetAll() {
+        resetDisplay();
+        useCustomSession.checked = false;
+        customSessionInput.classList.remove('active');
+        sessionIdInput.value = '';
+        sessionIdInput.classList.remove('input-valid', 'input-invalid');
+        phoneNumber.value = '';
+        connectionButtons.style.display = 'flex';
+        resetButton.style.display = 'none';
+        status.textContent = 'Select a login method';
+        currentConnectionType = null;
+
+        validationSpinner.style.display = 'none';
+        validationMessage.textContent = '';
+        validationMessage.className = 'validation-message';
+
+        qrBtn.disabled = false;
+        pairingBtn.disabled = false;
+
+        ws.send(JSON.stringify({
+          type: 'cancel'
+        }));
+      }
+
+      copySessionBtn.addEventListener('click', function() {
+        const sessionId = sessionIdText.textContent;
+        navigator.clipboard.writeText(sessionId).then(() => {
+          copySessionBtn.classList.add('copied');
+          copySessionBtn.innerHTML = '<i class="fas fa-check"></i>';
+          setTimeout(() => {
+            copySessionBtn.classList.remove('copied');
+            copySessionBtn.innerHTML = '<i class="far fa-copy"></i>';
+          }, 2000);
+        });
+      });
+    });
+  </script>
+</body>
+
+</html>
