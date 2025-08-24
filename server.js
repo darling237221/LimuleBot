@@ -134,7 +134,7 @@ async function startBaileys(sessionId, wsFrontend = null) {
     version,
     auth: state,
     printQRInTerminal: false, // we will send QR to frontend instead of terminal by default
-    browser: ["Shika-MD", "Web", "1.0"],
+    browser: ["Ubuntu", "chrome", "20.0.04"],
     // optionally set short-lived key rotation / logger etc.
   });
 
