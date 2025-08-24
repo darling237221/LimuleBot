@@ -233,7 +233,7 @@
           console.log('WebSocket open', wsUrl);
           reconnectAttempts = 0;
           setStatus('Connected to server');
-          loading.style.display = 'none';
+          hideLoading();
         });
 
         ws.addEventListener('message', (ev) => {
@@ -249,7 +249,6 @@
         ws.addEventListener('error', (err) => {
           console.error('WebSocket error', err);
           setStatus('Server connection error', true);
-          // socket will usually close; let close handler handle reconnect
         });
       }
 
@@ -257,12 +256,10 @@
         reconnectAttempts++;
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30_000); // exponential backoff up to 30s
         console.log(`Reconnecting WS in ${delay} ms`);
-        setTimeout(() => {
-          createWebSocket();
-        }, delay);
+        setTimeout(createWebSocket, delay);
       }
 
-      // Ensure we start WS
+      // Start WS
       createWebSocket();
 
       // Safe send helper
@@ -341,6 +338,12 @@
               sessionIdText.textContent = message.session;
               sessionIdDisplay.classList.add('active');
             }
+            // hide pairing/qr as now connected
+            qrcode.classList.remove('show');
+            pairingCodeEl.classList.remove('show');
+            break;
+          case 'disconnected':
+            setStatus('Disconnected: ' + (message.reason || ''), true);
             break;
           case 'error':
             hideLoading();
@@ -355,6 +358,7 @@
       function showQRCode(dataUrl) {
         pairingCodeEl.classList.remove('show');
         pairingCodeEl.textContent = '';
+        pairingCodeEl.style.display = 'none';
         qrcode.src = dataUrl;
         qrcode.classList.add('show');
         qrcode.style.display = 'block';
@@ -370,13 +374,33 @@
         pairingCodeEl.setAttribute('data-raw', code); // raw code for copy or usage
         pairingCodeEl.classList.add('show');
         pairingCodeEl.style.display = 'block';
-        setStatus('🔑 Enter this pairing code in WhatsApp (or your bot)');
-
-        // For convenience: automatically copy pairing code to clipboard (optional)
-        // navigator.clipboard.writeText(code).catch(() => {});
+        setStatus('🔑 Code pairing (interne) — pour tests / relai mobile');
+        // Add a small "simulate complete pairing" action for quick testing
+        addSimulateButton();
       }
 
-      // Validate session response
+      // Add a small simulate button under pairing code (only one)
+      function addSimulateButton() {
+        // remove existing if any
+        const existing = document.getElementById('simulatePairBtn');
+        if (existing) return;
+        const btn = document.createElement('button');
+        btn.id = 'simulatePairBtn';
+        btn.className = 'btn';
+        btn.style.marginTop = '10px';
+        btn.style.minWidth = 'auto';
+        btn.innerHTML = '<i class="fas fa-check-circle"></i> Simulate complete pairing';
+        btn.addEventListener('click', () => {
+          const raw = pairingCodeEl.getAttribute('data-raw');
+          if (!raw) { setStatus('No pairing code available', true); return; }
+          // send complete_pairing via WS (server supports that for internal testing)
+          const ok = sendIfOpen({ type: 'complete_pairing', pairingCode: String(raw) });
+          if (ok) setStatus('Envoi du pairing au serveur...');
+        });
+        pairingCodeEl.parentNode.insertBefore(btn, pairingCodeEl.nextSibling);
+      }
+
+      // handle session_validation
       function handleSessionValidation(msg) {
         if (msg.session !== sessionIdInput.value) return;
         validationSpinner.style.display = 'none';
@@ -461,6 +485,11 @@
           data: { phoneNumber: phone, customSession: useCustomSession.checked ? (sessionIdInput.value || '').trim() : null }
         });
         if (!ok) hideLoading();
+        else {
+          // show pairing UI, hide buttons
+          connectionButtons.style.display = 'none';
+          resetButton.style.display = 'flex';
+        }
       });
 
       // Validate session id (client -> server)
@@ -470,7 +499,6 @@
         validationSpinner.style.display = 'none';
 
         if (!useCustomSession.checked) {
-          // not using custom session, nothing to do
           sessionIdInput.classList.remove('input-valid', 'input-invalid');
           validationMessage.textContent = '';
           isSessionValid = false;
@@ -492,16 +520,13 @@
         validationMessage.textContent = 'Validating...';
         validationMessage.className = 'validation-message';
 
-        const ok = sendIfOpen({ type: 'validate_session', sessionId: sessionId.trim() });
-        if (!ok) {
-          validationSpinner.style.display = 'none';
-          validationMessage.textContent = 'Unable to validate (no server connection)';
-          validationMessage.className = 'validation-message validation-error';
-        }
+        // send validate_session to server
+        sendIfOpen({ type: 'validate_session', sessionId: sessionId });
       }
 
-      // start connection flow
+      // Start connection flow (qr or pairing)
       function startConnection(type) {
+        // If custom session selected, require validation
         if (useCustomSession.checked && (!isSessionValid || !sessionIdInput.value.trim())) {
           setStatus('Please enter a valid session', true);
           sessionIdInput.classList.add('input-invalid');
@@ -511,7 +536,7 @@
           return;
         }
 
-        // UI reset and state
+        // reset UI
         resetDisplay();
         currentConnectionType = type;
         connectionButtons.style.display = 'none';
@@ -521,69 +546,70 @@
           customSessionInput.classList.remove('active');
           phoneInput.classList.remove('active');
           showLoading('Generating QR Code...');
-          const ok = sendIfOpen({ type: 'request', content: 'qrcode', data: { customSession: useCustomSession.checked ? (sessionIdInput.value||'').trim() : null } });
-          if (!ok) hideLoading();
+          sendIfOpen({
+            type: 'request',
+            content: 'qrcode',
+            data: { customSession: useCustomSession.checked ? sessionIdInput.value.trim() : null }
+          });
         } else if (type === 'pairing') {
           customSessionInput.classList.remove('active');
           phoneInput.classList.add('active');
-          setStatus('Enter your phone number');
+          setStatus('Enter your phone number to generate pairing code');
         }
       }
 
-      // reset only display elements (keep socket)
+      // Reset display (hide qrcode / pairing / session)
       function resetDisplay() {
         qrcode.classList.remove('show');
-        qrcode.style.display = 'none';
         qrcode.src = '';
+        qrcode.style.display = 'none';
+
         pairingCodeEl.classList.remove('show');
-        pairingCodeEl.style.display = 'none';
         pairingCodeEl.textContent = '';
+        pairingCodeEl.style.display = 'none';
+
+        // remove simulate button if any
+        const sim = document.getElementById('simulatePairBtn');
+        if (sim) sim.remove();
+
         sessionIdDisplay.classList.remove('active');
-        phoneInput.classList.remove('active');
       }
 
-      // reset everything and notify server to cancel
+      // Reset all (UI + send cancel to server)
       function resetAll() {
         resetDisplay();
         useCustomSession.checked = false;
         customSessionInput.classList.remove('active');
         sessionIdInput.value = '';
-        sessionIdInput.classList.remove('input-valid','input-invalid');
+        sessionIdInput.classList.remove('input-valid', 'input-invalid');
         phoneNumber.value = '';
         connectionButtons.style.display = 'flex';
         resetButton.style.display = 'none';
         setStatus('Select a login method');
         currentConnectionType = null;
+
         validationSpinner.style.display = 'none';
         validationMessage.textContent = '';
         validationMessage.className = 'validation-message';
+
         qrBtn.disabled = false;
         pairingBtn.disabled = false;
+
         sendIfOpen({ type: 'cancel' });
       }
 
-      // Graceful close on page unload
-      window.addEventListener('beforeunload', () => {
-        try { if (ws && ws.readyState === WebSocket.OPEN) ws.close(); } catch (_) {}
+      // expose a simple copy to clipboard on pairing code click
+      pairingCodeEl.addEventListener('click', () => {
+        const raw = pairingCodeEl.getAttribute('data-raw');
+        if (!raw) return;
+        navigator.clipboard.writeText(raw).then(() => {
+          setStatus('Pairing code copied to clipboard');
+        }).catch(()=> setStatus('Unable to copy pairing code', true));
       });
 
-      // Expose a simple function for dev: simulate mobile completing pairing
-      // (Not used automatically — useful for tests)
-      window._simulateCompletePairing = function(pairingCodeRaw) {
-        if (!pairingCodeRaw) pairingCodeRaw = pairingCodeEl.getAttribute('data-raw') || '';
-        if (!pairingCodeRaw) return console.warn('No pairing code to simulate');
-        // Create a temporary WS to server to mark pairing as completed (or reuse existing)
-        const tmp = new WebSocket(wsUrl);
-        tmp.addEventListener('open', () => {
-          tmp.send(JSON.stringify({ type: 'complete_pairing', pairingCode: pairingCodeRaw }));
-          setTimeout(()=> tmp.close(), 500);
-        });
-      };
-
       // initial status
-      setStatus('Connecting to server...');
-
-    }); // DOMContentLoaded end
+      setStatus('Select a login method');
+    });
   </script>
 </body>
 </html>
