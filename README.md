@@ -1,24 +1,30 @@
-```markdown
-# LimuleBot
+# Shika-MD Login (module LimuleBot)
 
-Bienvenue dans **LimuleBot**, un bot WhatsApp modulaire propulsé par Baileys et Node.js. Il propose des commandes fun, utilitaires et de gestion de groupe, avec un système avancé de permissions, des tests unitaires, et une logique de déploiement facilitée.
+**Shika-MD Login** est un backend WebSocket léger (Express + Node.js) destiné à gérer l'authentification/connexion d'un bot WhatsApp (ex. LimuleBot).  
+Il fournit la génération de QR codes, un flux de pairing via un code alphanumérique de 8 caractères, et la gestion de sessions pour l'interface web.
+
+---
 
 ## Fonctionnalités principales
 
-- Génération de QR code pour login/pairing WhatsApp.
-- Système de gestion de sessions et pairings.
-- Backend WebSocket pour communication avec le frontend.
-- Déploiement simple sur Render ou Docker.
-- Stockage en mémoire pour les sessions (prévoir Redis ou DB en production).
+- Génération de QR code (data URL PNG) pour login WhatsApp.
+- Pairing via un **code alphanumérique de 8 caractères**.
+- Gestion de sessions (stockées en mémoire — utile pour les tests).
+- Backend WebSocket pour communication avec un frontend (ex. `index.html`).
+- Health-check HTTP (`/_health`) pour supervision.
+- Conçu pour un déploiement simple sur Render, Docker ou VPS.
+
+---
 
 ## Fichiers fournis
 
-- `package.json` : Dépendances et scripts.
-- `server.js` : Serveur Express + WebSocket.
-- `.gitignore` : Fichiers à ignorer.
-- `render.yaml` (optionnel) : Configuration Render.
-- `README.md` : Ce document.
-- `index.html` : Frontend (à fournir séparément).
+- `package.json` — dépendances et scripts (`start`, `start:dev`).
+- `server.js` — serveur Express + WebSocket (logique QR / pairing / session).
+- `index.html` — frontend (séparé).
+- `.gitignore` — fichiers à ignorer.
+- `render.yaml` (optionnel) — configuration Render.
+- `README.md` — ce document.
+- *(optionnel)* `.env.example` — exemple de variables d'environnement.
 
 ---
 
@@ -29,56 +35,113 @@ git clone <ton-repo>
 cd <repo>
 npm install
 npm start
-```
 
-Accède ensuite à [http://localhost:3000](http://localhost:3000) pour tester la page.
+Puis ouvre : http://localhost:3000
 
----
+En développement, pour rechargement automatique :
 
-## Déploiement sur Render
+npm run start:dev
+# ou si tu veux utiliser nodemon directement
+npx nodemon server.js
 
-1. Pousse le projet sur GitHub.
-2. Sur Render, crée un “Web Service” et connecte ton repo.
-3. Build command : `npm install`
-4. Start command : `npm start`
-5. Render définira automatiquement la variable `PORT`.
 
 ---
 
-## Notes techniques
+Exemple d’échange WebSocket
 
-- Le serveur stocke les sessions et pairings en mémoire (**volatile**).  
-  Pour la production, prévois Redis ou une base de données pour la persistance et le scaling.
-- Si tu développes en local et veux inclure le port dans l’URL WebSocket, modifie dans `index.html` :
-  ```js
-  const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-  const ws = new WebSocket(`${protocol}${window.location.host}`);
-  ```
+Client → Serveur
 
----
+{ "type": "request", "content": "pairing", "data": { "phoneNumber": "0123456789" } }
 
-## À améliorer / Options
+Serveur → Client
 
-- Génération de QR code (PNG) via `qrcode`.
-- Emission du `session` id après QR/pairing.
-- Gestion d’un code pairing à 6 chiffres, finalisation via `complete_pairing`.
-- Endpoints statiques + health check.
-- Stockage en mémoire : à remplacer pour la prod.
+{ "type": "pairing", "data": "ABCD2345" }        // code pairing (8 caractères)
+{ "type": "session", "session": "uuid-v4-string" }
 
-### Besoin d’aide supplémentaire ?
-- Je peux adapter `index.html` pour une meilleure gestion des erreurs côté client.
-- Je peux fournir un script de simulation de pairing mobile.
-- Je peux rédiger un `Dockerfile` pour déploiement via Docker.
+Mobile/Bot → Serveur (pour finaliser le pairing)
 
-Dis-moi ce dont tu as besoin !
+{ "type": "complete_pairing", "pairingCode": "ABCD2345" }
+
+Après validation, le serveur notifie le navigateur :
+
+{ "type": "connected", "session": "uuid-v4-string" }
+
 
 ---
 
-## Liens utiles
+Déploiement sur Render
 
-- [Documentation Baileys](https://github.com/adiwajshing/Baileys)
-- [Render](https://render.com/)
-```
+1. Pousse le repo sur GitHub.
 
-Tu peux maintenant copier ce contenu dans ton fichier [README.md](https://github.com/Devtali/LimuleBot/blob/main/README.md) sur GitHub.  
-Si tu veux que je réalise la modification automatiquement, donne-moi simplement ton accord ou le SHA du fichier actuel.
+
+2. Crée un service Web sur Render et connecte le repo.
+
+
+3. Build command : npm install
+
+
+4. Start command : npm start
+
+
+5. Render définit automatiquement la variable PORT. Le serveur écoute process.env.PORT.
+
+
+
+
+---
+
+Configuration & bonnes pratiques
+
+Stockage des sessions : le stockage en mémoire est volatile. En production, utiliser Redis ou une base de données (pour persistance et scaling).
+
+.env : il est conseillé d’utiliser un fichier .env pour PORT, REDIS_URL, etc. (ex. via dotenv).
+
+Sécurité : si exposition publique, sécuriser l’accès (HTTPS, reverse-proxy, auth pour endpoints d’administration).
+
+Scaling : pour plusieurs instances, centraliser PAIRINGS/SESSIONS (Redis) pour éviter la désynchronisation.
+
+
+
+---
+
+Fichiers / améliorations possibles
+
+Dockerfile — containerisation pour déploiement.
+
+.env.example — variables d’environnement exemplaires.
+
+Endpoint d’admin pour lister sessions / pairings (protégé).
+
+Integration Redis pour sessions/pairings.
+
+Script de simulation simulate_mobile_pairing.js (Node) pour tests locaux.
+
+
+
+---
+
+Notes techniques
+
+Pairing : code alphanumérique de 8 caractères (exclut caractères ambigus par défaut).
+
+QR : généré avec la librairie qrcode en data:image/png;base64,....
+
+WebSocket : implémenté avec ws (server) ; le client doit utiliser window.location.host pour inclure le port en dev.
+
+Health-check : GET /_health renvoie ok.
+
+
+
+---
+
+Liens utiles
+
+Baileys (WhatsApp)
+
+Render
+
+ws — WebSocket for Node.js
+
+
+
+---
