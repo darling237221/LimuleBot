@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>shikaMd - Connexion</title>
+  <title>Nazuna-AI - Connexion</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <style>
@@ -489,4 +489,101 @@
 
         sessionIdInput.classList.remove('input-valid', 'input-invalid');
         validationSpinner.style.display = 'inline-block';
-        validationMessage.textContent = 'Valida
+        validationMessage.textContent = 'Validating...';
+        validationMessage.className = 'validation-message';
+
+        const ok = sendIfOpen({ type: 'validate_session', sessionId: sessionId.trim() });
+        if (!ok) {
+          validationSpinner.style.display = 'none';
+          validationMessage.textContent = 'Unable to validate (no server connection)';
+          validationMessage.className = 'validation-message validation-error';
+        }
+      }
+
+      // start connection flow
+      function startConnection(type) {
+        if (useCustomSession.checked && (!isSessionValid || !sessionIdInput.value.trim())) {
+          setStatus('Please enter a valid session', true);
+          sessionIdInput.classList.add('input-invalid');
+          validationMessage.textContent = 'Invalid session';
+          validationMessage.className = 'validation-message validation-error';
+          sessionIdInput.focus();
+          return;
+        }
+
+        // UI reset and state
+        resetDisplay();
+        currentConnectionType = type;
+        connectionButtons.style.display = 'none';
+        resetButton.style.display = 'flex';
+
+        if (type === 'qrcode') {
+          customSessionInput.classList.remove('active');
+          phoneInput.classList.remove('active');
+          showLoading('Generating QR Code...');
+          const ok = sendIfOpen({ type: 'request', content: 'qrcode', data: { customSession: useCustomSession.checked ? (sessionIdInput.value||'').trim() : null } });
+          if (!ok) hideLoading();
+        } else if (type === 'pairing') {
+          customSessionInput.classList.remove('active');
+          phoneInput.classList.add('active');
+          setStatus('Enter your phone number');
+        }
+      }
+
+      // reset only display elements (keep socket)
+      function resetDisplay() {
+        qrcode.classList.remove('show');
+        qrcode.style.display = 'none';
+        qrcode.src = '';
+        pairingCodeEl.classList.remove('show');
+        pairingCodeEl.style.display = 'none';
+        pairingCodeEl.textContent = '';
+        sessionIdDisplay.classList.remove('active');
+        phoneInput.classList.remove('active');
+      }
+
+      // reset everything and notify server to cancel
+      function resetAll() {
+        resetDisplay();
+        useCustomSession.checked = false;
+        customSessionInput.classList.remove('active');
+        sessionIdInput.value = '';
+        sessionIdInput.classList.remove('input-valid','input-invalid');
+        phoneNumber.value = '';
+        connectionButtons.style.display = 'flex';
+        resetButton.style.display = 'none';
+        setStatus('Select a login method');
+        currentConnectionType = null;
+        validationSpinner.style.display = 'none';
+        validationMessage.textContent = '';
+        validationMessage.className = 'validation-message';
+        qrBtn.disabled = false;
+        pairingBtn.disabled = false;
+        sendIfOpen({ type: 'cancel' });
+      }
+
+      // Graceful close on page unload
+      window.addEventListener('beforeunload', () => {
+        try { if (ws && ws.readyState === WebSocket.OPEN) ws.close(); } catch (_) {}
+      });
+
+      // Expose a simple function for dev: simulate mobile completing pairing
+      // (Not used automatically — useful for tests)
+      window._simulateCompletePairing = function(pairingCodeRaw) {
+        if (!pairingCodeRaw) pairingCodeRaw = pairingCodeEl.getAttribute('data-raw') || '';
+        if (!pairingCodeRaw) return console.warn('No pairing code to simulate');
+        // Create a temporary WS to server to mark pairing as completed (or reuse existing)
+        const tmp = new WebSocket(wsUrl);
+        tmp.addEventListener('open', () => {
+          tmp.send(JSON.stringify({ type: 'complete_pairing', pairingCode: pairingCodeRaw }));
+          setTimeout(()=> tmp.close(), 500);
+        });
+      };
+
+      // initial status
+      setStatus('Connecting to server...');
+
+    }); // DOMContentLoaded end
+  </script>
+</body>
+</html>
