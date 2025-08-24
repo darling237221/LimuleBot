@@ -1,14 +1,16 @@
 /**
- * server.js (corrigé : pairing 8 caractères)
- * Backend Express + WebSocket minimal pour index.html
+ * server.js (final - pairing 8 caractères, robustifié)
  *
- * Note : stockage en mémoire (OK pour tests). En production => Redis/DB.
+ * Backend Express + WebSocket minimal pour index.html
+ * Stockage en mémoire (OK pour tests). En production => Redis/DB.
  */
 
 const express = require("express");
 const path = require("path");
 const http = require("http");
-const { WebSocketServer, WebSocket } = require("ws");
+const wsLib = require("ws"); // import compatible avec différentes versions
+const { WebSocketServer } = wsLib;
+const WebSocket = wsLib.WebSocket || wsLib; // fallback safe
 const QRCode = require("qrcode");
 const { v4: uuidv4 } = require("uuid");
 const crypto = require("crypto");
@@ -16,7 +18,7 @@ const crypto = require("crypto");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// servir fichiers statiques depuis le dossier courant
+// servir fichiers statiques depuis le dossier courant (index.html doit être à la racine)
 app.use(express.static(path.join(__dirname)));
 
 // health check
@@ -36,12 +38,23 @@ const PAIRINGS = new Map();
 // Nettoyage périodique (sessions > 1h, pairings > 10min)
 setInterval(() => {
   const now = Date.now();
+
   for (const [sid, info] of SESSIONS) {
+    // defensive: info.createdAt may be undefined in worst case
+    if (!info || !info.createdAt) {
+      SESSIONS.delete(sid);
+      continue;
+    }
     if (now - info.createdAt > 1000 * 60 * 60) { // 1h
       SESSIONS.delete(sid);
     }
   }
+
   for (const [code, p] of PAIRINGS) {
+    if (!p || !p.createdAt) {
+      PAIRINGS.delete(code);
+      continue;
+    }
     if (now - p.createdAt > 1000 * 60 * 10) { // 10min
       PAIRINGS.delete(code);
     }
@@ -80,14 +93,14 @@ wss.on("connection", (ws, req) => {
   ws.on("message", async (raw) => {
     let msg;
     try {
-      msg = JSON.parse(raw.toString());
+      msg = JSON.parse(raw?.toString?.() || raw);
     } catch (e) {
       return safeSend(ws, { type: "error", message: "Invalid JSON" });
     }
 
     try {
+      // --- QR code request ---
       if (msg.type === "request" && msg.content === "qrcode") {
-        // create session, generate QR code with session payload
         const sessionId = uuidv4();
         const payload = `shika-session:${sessionId}`;
 
@@ -103,21 +116,23 @@ wss.on("connection", (ws, req) => {
 
         console.log("Issued QR + session:", sessionId);
 
+      // --- Pairing request ---
       } else if (msg.type === "request" && msg.content === "pairing") {
-        // msg.data may include phoneNumber and customSession
-        const phoneNumber = msg.data && msg.data.phoneNumber ? String(msg.data.phoneNumber) : null;
-        const customSession = msg.data && msg.data.customSession ? String(msg.data.customSession) : null;
+        const phoneNumber = msg?.data?.phoneNumber ? String(msg.data.phoneNumber) : null;
+        const customSession = msg?.data?.customSession ? String(msg.data.customSession) : null;
 
         const sessionId = customSession || uuidv4();
-        // ensure session exists
+        // ensure session exists (associate this ws)
         SESSIONS.set(sessionId, { ws, createdAt: Date.now(), connected: false });
 
         // generate unique 8-character pairing code (retry up to N times)
-        let pairingCode;
+        let pairingCode = null;
         for (let attempt = 0; attempt < 10; attempt++) {
-          pairingCode = generatePairingCode(8);
-          if (!PAIRINGS.has(pairingCode)) break;
-          pairingCode = null;
+          const candidate = generatePairingCode(8);
+          if (!PAIRINGS.has(candidate)) {
+            pairingCode = candidate;
+            break;
+          }
         }
         if (!pairingCode) {
           return safeSend(ws, { type: "error", message: "Unable to create unique pairing code, try again" });
@@ -130,6 +145,7 @@ wss.on("connection", (ws, req) => {
 
         console.log("Issued pairing code", pairingCode, "for session", sessionId, "phone:", phoneNumber);
 
+      // --- Validate session ---
       } else if (msg.type === "validate_session") {
         const sessionId = msg.sessionId ? String(msg.sessionId) : null;
         if (!sessionId) {
@@ -139,34 +155,46 @@ wss.on("connection", (ws, req) => {
           safeSend(ws, { type: "session_validation", session: sessionId, valid: exists });
         }
 
+      // --- Cancel ---
       } else if (msg.type === "cancel") {
         // cancel all sessions owned by this ws
         for (const [sid, info] of SESSIONS) {
-          if (info.ws === ws) {
+          if (info && info.ws === ws) {
             SESSIONS.delete(sid);
             console.log("Cancelled session", sid);
           }
         }
         safeSend(ws, { type: "info", message: "Cancelled" });
 
+      // --- Complete pairing (from mobile/bot) ---
       } else if (msg.type === "complete_pairing") {
         const pairingCode = msg.pairingCode ? String(msg.pairingCode).toUpperCase() : null;
-        if (pairingCode && PAIRINGS.has(pairingCode)) {
-          const p = PAIRINGS.get(pairingCode);
-          const s = SESSIONS.get(p.sessionId);
-          if (s) {
-            s.connected = true;
-            if (s.ws && s.ws.readyState === WebSocket.OPEN) {
-              safeSend(s.ws, { type: "connected", session: p.sessionId });
-            }
-            PAIRINGS.delete(pairingCode);
-            console.log("Pairing completed for session", p.sessionId);
-            safeSend(ws, { type: "info", message: `Pairing completed for session ${p.sessionId}` });
-          } else {
-            safeSend(ws, { type: "error", message: "Session not found for this pairing" });
+        if (!pairingCode) {
+          return safeSend(ws, { type: "error", message: "Missing pairingCode" });
+        }
+        if (!PAIRINGS.has(pairingCode)) {
+          return safeSend(ws, { type: "error", message: "Invalid or expired pairing code" });
+        }
+
+        const p = PAIRINGS.get(pairingCode);
+        if (!p || !p.sessionId) {
+          PAIRINGS.delete(pairingCode);
+          return safeSend(ws, { type: "error", message: "Invalid pairing record" });
+        }
+
+        const s = SESSIONS.get(p.sessionId);
+        if (s) {
+          s.connected = true;
+          if (s.ws && s.ws.readyState === WebSocket.OPEN) {
+            safeSend(s.ws, { type: "connected", session: p.sessionId });
           }
+          PAIRINGS.delete(pairingCode);
+          console.log("Pairing completed for session", p.sessionId);
+          safeSend(ws, { type: "info", message: `Pairing completed for session ${p.sessionId}` });
         } else {
-          safeSend(ws, { type: "error", message: "Invalid or expired pairing code" });
+          // session not present (maybe expired) — inform caller
+          PAIRINGS.delete(pairingCode);
+          safeSend(ws, { type: "error", message: "Session not found for this pairing (maybe expired)" });
         }
 
       } else {
@@ -181,7 +209,7 @@ wss.on("connection", (ws, req) => {
   ws.on("close", () => {
     // cleanup sessions associated with this ws
     for (const [sid, info] of SESSIONS) {
-      if (info.ws === ws) {
+      if (info && info.ws === ws) {
         SESSIONS.delete(sid);
         console.log("Removed session on close:", sid);
       }
