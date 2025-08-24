@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  shika-md:
+    build: .
+    container_name: shika-md-app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    depends_on:
+      - redis
+    networks:
+      - shika-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: shika-md-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - shika-net
+
+networks:
+  shika-net:
+    driver: bridge
+
+volumes:
+  redis-data:
